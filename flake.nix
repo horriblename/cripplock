@@ -25,13 +25,13 @@
       default = pkgs."${cargoToml.package.name}";
     });
 
-    formatter = forAllSystems (system: (pkgsFor system).nixpkgs-fmt);
+    formatter = forAllSystems (system: (pkgsFor system).alejandra);
 
     devShell = forAllSystems (system: let
       pkgs = pkgsFor system;
     in
       pkgs.mkShell {
-        # inputsFrom = [pkgs.${cargoToml.package.name}];
+        inputsFrom = [pkgs.${cargoToml.package.name}];
         buildInputs = with pkgs; [
           rustc
           cargo
