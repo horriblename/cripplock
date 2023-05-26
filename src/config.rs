@@ -11,7 +11,14 @@ pub enum ReadConfigError {
 
     /// Config files should only be accessible by the owner
     LaxPermissionError,
+
+    /// The config file has invalid characters
+    InvalidConfigError,
     // CreateFileError,
+}
+
+pub struct Config {
+    pub pattern: Vec<u8>,
 }
 
 fn get_config_path() -> PathBuf {
@@ -32,23 +39,37 @@ fn get_config_path() -> PathBuf {
 pub fn read_config() -> RCResult<Config> {
     let config_dir = get_config_path();
     let config_file = config_dir.join("pattern");
+
     match fs::metadata(&config_file) {
         Ok(metadata) => {
             let perm = metadata.permissions().mode();
             if perm & GROUP_PERMISSIONS != 0 || perm & OTHERS_PERMISSIONS != 0 {
                 return Err(ReadConfigError::LaxPermissionError);
             }
-            read_config_file(&config_file).map_err(|err| ReadConfigError::IOError(err))
+            return read_config_file(&config_file);
         }
         Err(err) => Err(ReadConfigError::IOError(err)),
     }
 }
 
-fn read_config_file(config_file: &Path) -> io::Result<Config> {
-    let pattern = fs::read_to_string(config_file)?;
-    Ok(Config { pattern })
-}
+fn read_config_file(config_file: &Path) -> RCResult<Config> {
+    let pattern = fs::read(config_file).map_err(|err| ReadConfigError::IOError(err))?;
+    let mut pattern_acc = Vec::new();
 
-pub struct Config {
-    pub pattern: String,
+    for byte in pattern {
+        if byte < b'1' || byte > b'9' {
+            return Err(ReadConfigError::InvalidConfigError);
+        }
+
+        let n = byte - b'0';
+        if pattern_acc.contains(&n) {
+            return Err(ReadConfigError::InvalidConfigError);
+        }
+
+        pattern_acc.push(n);
+    }
+
+    Ok(Config {
+        pattern: pattern_acc,
+    })
 }

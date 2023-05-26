@@ -1,16 +1,21 @@
+use std::borrow::BorrowMut;
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use gtk::gdk;
 use gtk::prelude::*;
 
 mod config;
 
-struct Pattern {
-    pattern: Vec<u8>,
+struct RuntimeData {
+    config: config::Config,
     sequence: Vec<u8>,
 }
 
-impl Pattern {
-    fn new(pattern: Vec<u8>) -> Self {
-        Pattern {
-            pattern,
+impl RuntimeData {
+    fn new(config: config::Config) -> Self {
+        RuntimeData {
+            config,
             sequence: Default::default(),
         }
     }
@@ -28,12 +33,12 @@ impl Pattern {
     /// Validate the built up sequence, returns true if the current sequence matches the required
     /// pattern
     fn validate(&self) -> bool {
-        self.pattern == self.sequence
+        self.config.pattern == self.sequence
     }
 }
 
 // https://github.com/wmww/gtk-layer-shell/blob/master/examples/simple-example.c
-fn activate(application: &gtk::Application) {
+fn activate(application: &gtk::Application, runtime_data: Rc<RefCell<RuntimeData>>) {
     // Create a normal GTK window however you like
     let window = gtk::ApplicationWindow::new(application);
 
@@ -68,12 +73,44 @@ fn activate(application: &gtk::Application) {
 
     let grid = gtk::Grid::new();
 
+    // TODO
+    // let mut pattern_acc = Rc::new(Pattern::new(vec![1, 2, 3, 4, 7]));
+
     for i in 0..9_u8 {
         let row = i / 3;
         let col = i % 3;
         let id = i + 1;
         let label = gtk::Label::new(Some(&id.to_string()));
-        let with_padding = gtk::Box::builder().margin(20).child(&label).build();
+        let event_box = gtk::EventBox::builder().child(&label).build();
+        let runtime_data_clone = Rc::clone(&runtime_data);
+        event_box.connect_touch_event(move |_, event| {
+            println!("received touch event! {:?}", event.event_type());
+            match event.event_type() {
+                gdk::EventType::TouchBegin => {
+                    let mut runtime_data = runtime_data_clone.as_ref().borrow_mut();
+                    runtime_data.reset_sequence();
+                    runtime_data.handle_pattern_point(id);
+                }
+                gdk::EventType::TouchUpdate => runtime_data_clone
+                    .as_ref()
+                    .borrow_mut()
+                    .handle_pattern_point(id),
+                gdk::EventType::TouchEnd => {
+                    let mut runtime_data = runtime_data_clone.as_ref().borrow_mut();
+                    println!("{:?}", runtime_data.sequence);
+                    if runtime_data.validate() {
+                        gtk::main_quit();
+                    }
+                    runtime_data.reset_sequence();
+                }
+                gdk::EventType::TouchCancel => {
+                    runtime_data_clone.as_ref().borrow_mut().reset_sequence()
+                }
+                _ => unreachable!(),
+            }
+            Inhibit(true)
+        });
+        let with_padding = gtk::Box::builder().margin(20).child(&event_box).build();
 
         grid.attach(&with_padding, col.into(), row.into(), 1, 1);
     }
@@ -91,8 +128,12 @@ fn main() {
     );
     // let config = config::read_config();
     //
-    application.connect_activate(|app| {
-        activate(app);
+    let runtime_data = Rc::new(RefCell::new(RuntimeData::new(config::Config {
+        pattern: vec![1, 2, 3, 4, 7],
+    })));
+    application.connect_activate(move |app| {
+        let runtime_data = runtime_data.clone();
+        activate(app, runtime_data);
     });
 
     application.run();
