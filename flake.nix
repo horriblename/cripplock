@@ -33,6 +33,9 @@
       pkgs.mkShell {
         inputsFrom = [pkgs.${cargoToml.package.name}];
         buildInputs = with pkgs; [
+          meson
+          ninja
+          gtkmm3
           rustc
           cargo
           rustfmt
