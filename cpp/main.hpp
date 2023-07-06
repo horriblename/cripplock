@@ -4,6 +4,8 @@
 struct RuntimeData {
   config::Config config;
 
+  RuntimeData(config::Config config) : config(config) {}
+
   void push_to_sequence(config::code_point code) {
     if (code < 1 || code > 9) {
       // throw exception?
@@ -32,18 +34,8 @@ struct RuntimeData {
                       this->config.pattern.begin());
   }
 
+  std::vector<config::code_point> accumulated_sequence;
+
 private:
   config::code_point occupied[10];
-  std::vector<config::code_point> accumulated_sequence;
 };
-
-struct EventData {
-public:
-  GHashTable *pointer_info; /* GdkDevice -> AxesInfo */
-  GHashTable *touch_info;   /*GdkEventSequence -> AxesInfo */
-
-  EventData();
-};
-
-static EventData *new_event_data();
-static void event_data_free(EventData *data);
